@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,24 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				bulan: {
+					blue: '#3B5999',
+					teal: '#008080',
+					orange: {
+						soft: '#FFA07A'
+					},
+					gray: {
+						dark: '#333333',
+						light: '#F5F5F5'
+					},
+					white: '#FFFFFF',
+					yellow: {
+						lemon: '#FFD700'
+					},
+					red: {
+						coral: '#FF6F61'
+					}
 				}
 			},
 			borderRadius: {
@@ -89,8 +108,27 @@ export default {
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out'
+			},
+			fontFamily: {
+				sans: ['NotoSans', 'sans-serif'],
+				'sans-mongolian': ['Noto Sans Mongolian', 'sans-serif']
+			},
+			typography: {
+				DEFAULT: {
+					css: {
+						maxWidth: '65ch',
+						color: '#333333',
+						'h1, h2, h3': {
+							color: '#3B5999',
+							fontWeight: '700',
+						},
+						strong: {
+							fontWeight: '700',
+						},
+					},
+				},
 			}
 		}
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [require("tailwindcss-animate"), require('@tailwindcss/typography')],
 } satisfies Config;
