@@ -73,7 +73,13 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            {appState === "input" && <InputForm onSubmit={handleFormSubmit} />}
+            {appState === "input" && (
+              <InputForm 
+                onSubmit={handleFormSubmit} 
+                setResultsData={setResultsData}
+                setAppState={setAppState}
+              />
+            )}
             {appState === "loading" && <LoadingIndicator formData={formData} />}
             {appState === "results" && resultsData && (
               <ResultsDisplay data={resultsData} onNewArticle={resetApp} />
