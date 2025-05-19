@@ -37,14 +37,37 @@ const Index = () => {
       );
 
       const responseData = await response.json();
+      
+      // Handle the new response format which might be wrapped in an array
+      let processedData: ArticleData;
+      
+      if (Array.isArray(responseData) && responseData.length > 0) {
+        // Extract from array wrapper
+        const firstItem = responseData[0];
+        
+        // Check if we have the nested structure with json property
+        if (firstItem.json && firstItem.json.content && firstItem.json.coverImage) {
+          processedData = {
+            status: "success",
+            content: firstItem.json.content,
+            coverImage: firstItem.json.coverImage
+          };
+        } else {
+          // Try to use the item directly
+          processedData = firstItem as ArticleData;
+        }
+      } else {
+        // Use response data directly
+        processedData = responseData as ArticleData;
+      }
 
-      if (responseData.status === "error") {
-        setErrorMessage(responseData.errorMessage || "Тодорхойгүй алдаа");
+      if (processedData.status === "error") {
+        setErrorMessage(processedData.errorMessage || "Тодорхойгүй алдаа");
         setAppState("error");
         return;
       }
 
-      setResultsData(responseData);
+      setResultsData(processedData);
       setAppState("results");
     } catch (error) {
       console.error("Error submitting form:", error);

@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { ArticleData } from "@/types/article";
 import { Button } from "@/components/ui/button";
@@ -13,10 +12,16 @@ interface ResultsDisplayProps {
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) => {
   const [isCopying, setIsCopying] = useState(false);
 
+  // Get the image source from either the new or old format
+  const imageSource = data.coverImage || data.imageBase64 || "";
+  
+  // Get the title from either format
+  const title = data.generatedTitle || "Нийтлэл";
+
   const downloadImage = () => {
     const link = document.createElement("a");
-    link.href = data.imageBase64;
-    link.download = `${data.generatedTitle.replace(/[^\w\s]/gi, "")}.png`;
+    link.href = imageSource;
+    link.download = `image.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -31,32 +36,53 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
   const copyArticleText = () => {
     setIsCopying(true);
 
-    let textToCopy = `${data.generatedTitle}\n\n`;
-    textToCopy += `${data.introduction.content}\n\n`;
+    let textToCopy = "";
 
-    data.sections.forEach((section) => {
-      if (section.type === "heading") {
-        textToCopy += `${section.content}\n\n`;
-      } else if (section.type === "paragraph") {
-        textToCopy += `${section.content}\n\n`;
-      } else if (section.type === "list") {
-        section.items?.forEach((item, index) => {
-          if (section.ordered) {
-            textToCopy += `${index + 1}. ${item}\n`;
-          } else {
-            textToCopy += `• ${item}\n`;
+    // Check if we have HTML content (new format)
+    if (data.content) {
+      // Create a temporary element to parse the HTML
+      const tempEl = document.createElement('div');
+      tempEl.innerHTML = data.content;
+      
+      // Extract text content, removing HTML tags
+      textToCopy = tempEl.textContent || tempEl.innerText || "";
+    } 
+    // Otherwise use the old format
+    else if (data.generatedTitle) {
+      textToCopy = `${data.generatedTitle}\n\n`;
+      
+      if (data.introduction) {
+        textToCopy += `${data.introduction.content}\n\n`;
+      }
+      
+      if (data.sections) {
+        data.sections.forEach((section) => {
+          if (section.type === "heading") {
+            textToCopy += `${section.content}\n\n`;
+          } else if (section.type === "paragraph") {
+            textToCopy += `${section.content}\n\n`;
+          } else if (section.type === "list") {
+            section.items?.forEach((item, index) => {
+              if (section.ordered) {
+                textToCopy += `${index + 1}. ${item}\n`;
+              } else {
+                textToCopy += `• ${item}\n`;
+              }
+            });
+            textToCopy += "\n";
           }
         });
-        textToCopy += "\n";
       }
-    });
 
-    textToCopy += `${data.conclusion.content}`;
+      if (data.conclusion) {
+        textToCopy += `${data.conclusion.content}`;
+      }
 
-    // Remove Markdown formatting for plain text
-    textToCopy = textToCopy
-      .replace(/\*\*(.*?)\*\*/g, "$1") // Bold
-      .replace(/\*(.*?)\*/g, "$1"); // Italic
+      // Remove Markdown formatting for plain text
+      textToCopy = textToCopy
+        .replace(/\*\*(.*?)\*\*/g, "$1") // Bold
+        .replace(/\*(.*?)\*/g, "$1"); // Italic
+    }
 
     navigator.clipboard.writeText(textToCopy).then(() => {
       toast({
@@ -81,85 +107,99 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
   return (
     <div className="space-y-8">
       <div className="text-center">
-        <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-4">{data.generatedTitle}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-4">{title}</h1>
       </div>
 
-      <div className="bg-white rounded-lg overflow-hidden shadow-md relative">
-        <img src={data.imageBase64} alt={data.generatedTitle} className="w-full h-auto object-cover" />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={downloadImage}
-          className="absolute top-2 right-2 bg-white/80 hover:bg-white"
-        >
-          <Download className="h-4 w-4 mr-1" /> Зураг Татах
-        </Button>
-      </div>
+      {imageSource && (
+        <div className="bg-white rounded-lg overflow-hidden shadow-md relative">
+          <img src={imageSource} alt="Нийтлэлийн зураг" className="w-full h-auto object-cover" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={downloadImage}
+            className="absolute top-2 right-2 bg-white/80 hover:bg-white"
+          >
+            <Download className="h-4 w-4 mr-1" /> Зураг Татах
+          </Button>
+        </div>
+      )}
 
       <div className="prose prose-lg max-w-none bg-white p-6 rounded-lg shadow-md">
-        <div className="mb-6">
-          <p 
-            className="text-[#333333] leading-relaxed" 
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(data.introduction.content) }}
-          ></p>
-        </div>
-
-        {data.sections.map((section, index) => {
-          if (section.type === "heading") {
-            return (
-              <div key={index} className="mt-6 mb-4">
-                {section.level === 2 ? (
-                  <h2 className="text-xl font-bold text-[#008080]">{section.content}</h2>
-                ) : (
-                  <h3 className="text-lg font-semibold text-[#008080]">{section.content}</h3>
-                )}
-              </div>
-            );
-          } else if (section.type === "paragraph") {
-            return (
-              <div key={index} className="my-4">
+        {/* Display HTML content if we have it (new format) */}
+        {data.content ? (
+          <div dangerouslySetInnerHTML={{ __html: data.content }}></div>
+        ) : (
+          // Display the old format content
+          <>
+            <div className="mb-6">
+              {data.introduction && (
                 <p 
                   className="text-[#333333] leading-relaxed" 
-                  dangerouslySetInnerHTML={{ __html: section.content ? renderMarkdown(section.content) : "" }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(data.introduction.content) }}
+                ></p>
+              )}
+            </div>
+
+            {data.sections?.map((section, index) => {
+              if (section.type === "heading") {
+                return (
+                  <div key={index} className="mt-6 mb-4">
+                    {section.level === 2 ? (
+                      <h2 className="text-xl font-bold text-[#008080]">{section.content}</h2>
+                    ) : (
+                      <h3 className="text-lg font-semibold text-[#008080]">{section.content}</h3>
+                    )}
+                  </div>
+                );
+              } else if (section.type === "paragraph") {
+                return (
+                  <div key={index} className="my-4">
+                    <p 
+                      className="text-[#333333] leading-relaxed" 
+                      dangerouslySetInnerHTML={{ __html: section.content ? renderMarkdown(section.content) : "" }}
+                    ></p>
+                  </div>
+                );
+              } else if (section.type === "list") {
+                return (
+                  <div key={index} className="my-4">
+                    {section.ordered ? (
+                      <ol className="list-decimal pl-5 space-y-2">
+                        {section.items?.map((item, itemIndex) => (
+                          <li 
+                            key={itemIndex}
+                            className="text-[#333333]"
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
+                          ></li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <ul className="list-disc pl-5 space-y-2">
+                        {section.items?.map((item, itemIndex) => (
+                          <li 
+                            key={itemIndex}
+                            className="text-[#333333]"
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
+                          ></li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            })}
+
+            {data.conclusion && (
+              <div className="mt-6">
+                <p 
+                  className="text-[#333333] leading-relaxed" 
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(data.conclusion.content) }}
                 ></p>
               </div>
-            );
-          } else if (section.type === "list") {
-            return (
-              <div key={index} className="my-4">
-                {section.ordered ? (
-                  <ol className="list-decimal pl-5 space-y-2">
-                    {section.items?.map((item, itemIndex) => (
-                      <li 
-                        key={itemIndex}
-                        className="text-[#333333]"
-                        dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
-                      ></li>
-                    ))}
-                  </ol>
-                ) : (
-                  <ul className="list-disc pl-5 space-y-2">
-                    {section.items?.map((item, itemIndex) => (
-                      <li 
-                        key={itemIndex}
-                        className="text-[#333333]"
-                        dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
-                      ></li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          }
-          return null;
-        })}
-
-        <div className="mt-6">
-          <p 
-            className="text-[#333333] leading-relaxed" 
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(data.conclusion.content) }}
-          ></p>
-        </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 justify-center mt-8">

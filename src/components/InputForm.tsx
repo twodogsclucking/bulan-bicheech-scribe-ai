@@ -1,7 +1,6 @@
-
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import { FormData, ArticleData } from "@/types/article";
+import { FormData, ArticleData, NestedJsonResponse } from "@/types/article";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,23 +54,61 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, setResultsData, setAppS
     reader.onload = (e) => {
       try {
         if (e.target?.result) {
-          // Parse JSON and validate against ArticleData interface
-          const jsonData = JSON.parse(e.target.result as string) as ArticleData;
+          let jsonContent = e.target.result as string;
           
-          // Basic validation of required fields
-          if (
-            !jsonData.generatedTitle ||
-            !jsonData.imageBase64 ||
-            !jsonData.introduction ||
-            !jsonData.sections ||
-            !jsonData.conclusion
-          ) {
-            throw new Error("JSON бүтэц буруу байна. Шаардлагатай талбарууд алга байна.");
+          // Log the raw content for debugging
+          console.log("Raw file content:", jsonContent);
+          
+          // Try to parse the JSON
+          let parsedData;
+          try {
+            parsedData = JSON.parse(jsonContent);
+            console.log("Parsed data:", parsedData);
+          } catch (parseError) {
+            console.error("JSON parsing error:", parseError);
+            throw new Error("JSON файл буруу форматтай байна.");
           }
-
-          // Set results data and change app state
-          setResultsData(jsonData);
-          setAppState("results");
+          
+          // Handle the array wrapping if present
+          if (Array.isArray(parsedData)) {
+            console.log("JSON is an array, taking first item");
+            if (parsedData.length === 0) {
+              throw new Error("JSON массив хоосон байна.");
+            }
+            parsedData = parsedData[0];
+          }
+          
+          // Check if we have the nested structure with json property
+          const nestedData = parsedData as NestedJsonResponse;
+          if (nestedData.json && nestedData.json.content && nestedData.json.coverImage) {
+            console.log("Found nested json structure");
+            
+            // Convert to our ArticleData format
+            const articleData: ArticleData = {
+              status: "success",
+              content: nestedData.json.content,
+              coverImage: nestedData.json.coverImage
+            };
+            
+            // Set results data and change app state
+            setResultsData(articleData);
+            setAppState("results");
+            return;
+          }
+          
+          // If not nested, try to use it directly if it matches ArticleData
+          const directData = parsedData as ArticleData;
+          if (
+            (directData.content || directData.generatedTitle) && 
+            (directData.coverImage || directData.imageBase64)
+          ) {
+            console.log("Using direct data structure");
+            setResultsData(directData);
+            setAppState("results");
+            return;
+          }
+          
+          throw new Error("JSON бүтэц буруу байна. Шаардлагатай талбарууд алга байна.");
         }
       } catch (error) {
         console.error("JSON файл уншихад алдаа гарлаа:", error);
