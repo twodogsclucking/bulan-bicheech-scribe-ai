@@ -1,7 +1,26 @@
-import React, { useState } from "react";
-import { ArticleData } from "@/types/article";
-import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import React, { useState, useEffect } from "react";
+// Assuming ArticleData is defined in '@/types/article'
+// and its structure is something like:
+// interface ArticleData {
+//   content?: string;         // HTML string
+//   coverImage?: string;      // Base64 string or full data URL
+//   imageBase64?: string;     // Fallback for coverImage
+//   generatedTitle?: string;  // Preferred explicit title
+//
+//   // Fields for "old format" if content is not present
+//   introduction?: { content: string };
+//   sections?: Array<{
+//     type: "heading" | "paragraph" | "list";
+//     level?: number;
+//     content?: string;
+//     items?: string[];
+//     ordered?: boolean;
+//   }>;
+//   conclusion?: { content: string };
+// }
+import { ArticleData } from "@/types/article"; // Your existing import
+import { Button } from "@/components/ui/button"; // Your existing import
+import { toast } from "@/hooks/use-toast";       // Your existing import
 import { Download, Copy, ArrowRight } from "lucide-react";
 
 interface ResultsDisplayProps {
@@ -11,17 +30,69 @@ interface ResultsDisplayProps {
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) => {
   const [isCopying, setIsCopying] = useState(false);
+  const [finalImageSource, setFinalImageSource] = useState<string>("");
+  const [displayTitle, setDisplayTitle] = useState<string>("Нийтлэл");
 
-  // Get the image source from either the new or old format
-  const imageSource = data.coverImage || data.imageBase64 || "";
-  
-  // Get the title from either format
-  const title = data.generatedTitle || "Нийтлэл";
+  useEffect(() => {
+    // --- IMAGE SOURCE LOGIC ---
+    let imageSrc = "";
+    const rawCoverImage = data.coverImage;
+    const rawImageBase64 = data.imageBase64;
+
+    if (rawCoverImage && typeof rawCoverImage === 'string') {
+      if (rawCoverImage.startsWith('data:image')) {
+        imageSrc = rawCoverImage;
+      } else {
+        // Assuming PNG if not a full data URL, based on downloadImage's filename.
+        // Adjust "image/png" if your image types vary and can be determined.
+        imageSrc = `data:image/png;base64,${rawCoverImage}`;
+      }
+    } else if (rawImageBase64 && typeof rawImageBase64 === 'string') { // Fallback
+      if (rawImageBase64.startsWith('data:image')) {
+        imageSrc = rawImageBase64;
+      } else {
+        imageSrc = `data:image/png;base64,${rawImageBase64}`;
+      }
+    }
+    setFinalImageSource(imageSrc);
+
+    // --- TITLE LOGIC ---
+    let titleStr = "Нийтлэл"; // Default title
+
+    if (data.generatedTitle && typeof data.generatedTitle === 'string' && data.generatedTitle.trim() !== "") {
+      titleStr = data.generatedTitle.trim();
+    } else if (data.content && typeof data.content === 'string') {
+      // Try to extract title from HTML content if generatedTitle is not available
+      // This part runs in the browser, so document is available.
+      try {
+        const tempEl = document.createElement('div');
+        tempEl.innerHTML = data.content;
+        const titleTag = tempEl.querySelector('title');
+        if (titleTag && titleTag.textContent && titleTag.textContent.trim() !== "") {
+          titleStr = titleTag.textContent.trim();
+        }
+      } catch (e) {
+        console.error("Error parsing HTML to extract title:", e);
+        // titleStr remains default if error or no title tag
+      }
+    }
+    setDisplayTitle(titleStr);
+
+  }, [data]); // Recalculate when data changes
 
   const downloadImage = () => {
+    if (!finalImageSource) {
+      toast({
+        title: "Алдаа",
+        description: "Татах зураг олдсонгүй.",
+        variant: "destructive",
+        duration: 2000,
+      });
+      return;
+    }
     const link = document.createElement("a");
-    link.href = imageSource;
-    link.download = `image.png`;
+    link.href = finalImageSource;
+    link.download = `image.png`; // Consider making filename dynamic if type varies
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -35,38 +106,35 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
 
   const copyArticleText = () => {
     setIsCopying(true);
-
     let textToCopy = "";
 
-    // Check if we have HTML content (new format)
-    if (data.content) {
-      // Create a temporary element to parse the HTML
+    if (data.content && typeof data.content === 'string') {
       const tempEl = document.createElement('div');
       tempEl.innerHTML = data.content;
-      
-      // Extract text content, removing HTML tags
       textToCopy = tempEl.textContent || tempEl.innerText || "";
-    } 
-    // Otherwise use the old format
-    else if (data.generatedTitle) {
-      textToCopy = `${data.generatedTitle}\n\n`;
+    } else if (data.generatedTitle || data.introduction || data.sections || data.conclusion) {
+      // Fallback to "old format" if HTML content is missing
+      // Use the explicitly provided generatedTitle for copying if it exists in the data object
+      if (data.generatedTitle && typeof data.generatedTitle === 'string') {
+        textToCopy += `${data.generatedTitle}\n\n`;
+      }
       
-      if (data.introduction) {
+      if (data.introduction?.content && typeof data.introduction.content === 'string') {
         textToCopy += `${data.introduction.content}\n\n`;
       }
       
       if (data.sections) {
         data.sections.forEach((section) => {
-          if (section.type === "heading") {
-            textToCopy += `${section.content}\n\n`;
-          } else if (section.type === "paragraph") {
-            textToCopy += `${section.content}\n\n`;
-          } else if (section.type === "list") {
-            section.items?.forEach((item, index) => {
-              if (section.ordered) {
-                textToCopy += `${index + 1}. ${item}\n`;
-              } else {
-                textToCopy += `• ${item}\n`;
+          if (section.content && typeof section.content === 'string' && (section.type === "heading" || section.type === "paragraph")) {
+             textToCopy += `${section.content}\n\n`;
+          } else if (section.type === "list" && section.items) {
+            section.items.forEach((item, index) => {
+              if (typeof item === 'string') {
+                if (section.ordered) {
+                  textToCopy += `${index + 1}. ${item}\n`;
+                } else {
+                  textToCopy += `• ${item}\n`;
+                }
               }
             });
             textToCopy += "\n";
@@ -74,14 +142,24 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
         });
       }
 
-      if (data.conclusion) {
+      if (data.conclusion?.content && typeof data.conclusion.content === 'string') {
         textToCopy += `${data.conclusion.content}`;
       }
 
-      // Remove Markdown formatting for plain text
       textToCopy = textToCopy
-        .replace(/\*\*(.*?)\*\*/g, "$1") // Bold
-        .replace(/\*(.*?)\*/g, "$1"); // Italic
+        .replace(/\*\*(.*?)\*\*/g, "$1") 
+        .replace(/\*(.*?)\*/g, "$1");
+    }
+
+    if (!textToCopy.trim()) {
+        toast({
+            title: "Анхаар",
+            description: "Хуулах текст олдсонгүй.",
+            variant: "destructive",
+            duration: 2000,
+        });
+        setIsCopying(false);
+        return;
     }
 
     navigator.clipboard.writeText(textToCopy).then(() => {
@@ -93,12 +171,18 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
       setIsCopying(false);
     }).catch(err => {
       console.error("Could not copy text: ", err);
+      toast({
+        title: "Алдаа",
+        description: "Текст хуулж чадсангүй.",
+        variant: "destructive",
+        duration: 2000,
+      });
       setIsCopying(false);
     });
   };
 
-  // Function to render Markdown content
-  const renderMarkdown = (content: string) => {
+  const renderMarkdown = (content: string | undefined): string => {
+    if (typeof content !== 'string') return "";
     return content
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>");
@@ -107,12 +191,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
   return (
     <div className="space-y-8">
       <div className="text-center">
-        <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-4">{title}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-4">{displayTitle}</h1>
       </div>
 
-      {imageSource && (
+      {finalImageSource && (
         <div className="bg-white rounded-lg overflow-hidden shadow-md relative">
-          <img src={imageSource} alt="Нийтлэлийн зураг" className="w-full h-auto object-cover" />
+          <img src={finalImageSource} alt="Нийтлэлийн зураг" className="w-full h-auto object-cover" />
           <Button
             variant="outline"
             size="sm"
@@ -125,23 +209,21 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
       )}
 
       <div className="prose prose-lg max-w-none bg-white p-6 rounded-lg shadow-md">
-        {/* Display HTML content if we have it (new format) */}
-        {data.content ? (
+        {data.content && typeof data.content === 'string' ? (
           <div dangerouslySetInnerHTML={{ __html: data.content }}></div>
         ) : (
-          // Display the old format content
           <>
-            <div className="mb-6">
-              {data.introduction && (
-                <p 
-                  className="text-[#333333] leading-relaxed" 
+            {data.introduction?.content && (
+              <div className="mb-6">
+                <p
+                  className="text-[#333333] leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(data.introduction.content) }}
                 ></p>
-              )}
-            </div>
+              </div>
+            )}
 
             {data.sections?.map((section, index) => {
-              if (section.type === "heading") {
+              if (section.type === "heading" && section.content) {
                 return (
                   <div key={index} className="mt-6 mb-4">
                     {section.level === 2 ? (
@@ -151,22 +233,22 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
                     )}
                   </div>
                 );
-              } else if (section.type === "paragraph") {
+              } else if (section.type === "paragraph" && section.content) {
                 return (
                   <div key={index} className="my-4">
-                    <p 
-                      className="text-[#333333] leading-relaxed" 
-                      dangerouslySetInnerHTML={{ __html: section.content ? renderMarkdown(section.content) : "" }}
+                    <p
+                      className="text-[#333333] leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(section.content) }}
                     ></p>
                   </div>
                 );
-              } else if (section.type === "list") {
+              } else if (section.type === "list" && section.items) {
                 return (
                   <div key={index} className="my-4">
                     {section.ordered ? (
                       <ol className="list-decimal pl-5 space-y-2">
-                        {section.items?.map((item, itemIndex) => (
-                          <li 
+                        {section.items.map((item, itemIndex) => (
+                          <li
                             key={itemIndex}
                             className="text-[#333333]"
                             dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
@@ -175,8 +257,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
                       </ol>
                     ) : (
                       <ul className="list-disc pl-5 space-y-2">
-                        {section.items?.map((item, itemIndex) => (
-                          <li 
+                        {section.items.map((item, itemIndex) => (
+                          <li
                             key={itemIndex}
                             className="text-[#333333]"
                             dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
@@ -190,10 +272,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
               return null;
             })}
 
-            {data.conclusion && (
+            {data.conclusion?.content && (
               <div className="mt-6">
-                <p 
-                  className="text-[#333333] leading-relaxed" 
+                <p
+                  className="text-[#333333] leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(data.conclusion.content) }}
                 ></p>
               </div>
