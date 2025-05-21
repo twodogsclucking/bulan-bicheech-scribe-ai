@@ -1,84 +1,161 @@
-import React, { useState, useEffect } from "react";
-// Assuming ArticleData is defined in '@/types/article'
-// and its structure is something like:
-// interface ArticleData {
-//   content?: string;         // HTML string
-//   coverImage?: string;      // Base64 string or full data URL
-//   imageBase64?: string;     // Fallback for coverImage
-//   generatedTitle?: string;  // Preferred explicit title
-//
-//   // Fields for "old format" if content is not present
-//   introduction?: { content: string };
-//   sections?: Array<{
-//     type: "heading" | "paragraph" | "list";
-//     level?: number;
-//     content?: string;
-//     items?: string[];
-//     ordered?: boolean;
-//   }>;
-//   conclusion?: { content: string };
-// }
-import { ArticleData } from "@/types/article"; // Your existing import
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button"; // Your existing import
 import { toast } from "@/hooks/use-toast";       // Your existing import
 import { Download, Copy, ArrowRight } from "lucide-react";
 
+// --- Type Definitions ---
+
+/**
+ * Represents the core JSON structure within each item of the new data array.
+ */
+interface ArticleJsonData {
+  content: string;        // HTML string
+  coverImage?: string;     // Base64 string (without 'data:image/png;base64,' prefix)
+  generatedTitle?: string; // Optional explicit title provided in the JSON
+}
+
+/**
+ * Represents an item in the new array data structure.
+ * Example: [{ json: { content: "...", coverImage: "..." } }]
+ */
+interface NewArticleFormatItem {
+  json: ArticleJsonData;
+  // pairedItem?: any; // Retained from example, include if used, otherwise optional
+}
+
+/**
+ * Represents the fallback data structure for direct file uploads ("debug method").
+ * This allows the component to also accept a single object.
+ */
+interface FallbackArticleData {
+  content?: string;         // HTML string
+  coverImage?: string;      // Base64 string or a full data URL
+  imageBase64?: string;     // Base64 string (raw, for fallback if coverImage is not a full URL)
+  generatedTitle?: string;  // Explicit title
+}
+
+/**
+ * The 'data' prop can be the new array format or the fallback single object.
+ */
+type ResultsDisplayData = NewArticleFormatItem[] | FallbackArticleData;
+
 interface ResultsDisplayProps {
-  data: ArticleData;
+  data: ResultsDisplayData;
   onNewArticle: () => void;
 }
 
+// --- Helper Functions ---
+
+/**
+ * Extracts a title from an HTML string.
+ * It first looks for a <title> tag, then for the first <h1>-<h6> tag.
+ * @param htmlString The HTML content.
+ * @returns The extracted title or null if not found.
+ */
+const extractTitleFromHtml = (htmlString: string): string | null => {
+  if (typeof window === "undefined") return null; // Guard for server-side rendering
+  try {
+    const tempEl = document.createElement('div');
+    tempEl.innerHTML = htmlString;
+
+    const titleTag = tempEl.querySelector('title');
+    if (titleTag?.textContent?.trim()) {
+      return titleTag.textContent.trim();
+    }
+
+    const headingTag = tempEl.querySelector('h1, h2, h3, h4, h5, h6');
+    if (headingTag?.textContent?.trim()) {
+      return headingTag.textContent.trim();
+    }
+  } catch (e) {
+    console.error("Error parsing HTML to extract title:", e);
+  }
+  return null;
+};
+
+/**
+ * Extracts plain text content from an HTML string.
+ * @param htmlString The HTML content.
+ * @returns The extracted plain text.
+ */
+const extractTextFromHtml = (htmlString: string): string => {
+  if (typeof window === "undefined") return ""; // Guard for server-side rendering
+  try {
+    const tempEl = document.createElement('div');
+    tempEl.innerHTML = htmlString;
+    return tempEl.textContent || tempEl.innerText || "";
+  } catch (e) {
+    console.error("Error extracting text from HTML:", e);
+    return "";
+  }
+};
+
+// --- Component ---
+
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) => {
   const [isCopying, setIsCopying] = useState(false);
-  const [finalImageSource, setFinalImageSource] = useState<string>("");
-  const [displayTitle, setDisplayTitle] = useState<string>("Нийтлэл");
 
-  useEffect(() => {
-    // --- IMAGE SOURCE LOGIC ---
-    let imageSrc = "";
-    const rawCoverImage = data.coverImage;
-    const rawImageBase64 = data.imageBase64;
+  // Memoize processed article data to avoid redundant calculations.
+  // This recalculates when the 'data' prop changes.
+  const processedArticle = useMemo(() => {
+    let title: string = "Нийтлэл"; // Default title
+    let imageSource: string = "";
+    let mainHtmlContent: string = "";
 
-    if (rawCoverImage && typeof rawCoverImage === 'string') {
-      if (rawCoverImage.startsWith('data:image')) {
-        imageSrc = rawCoverImage;
-      } else {
-        // Assuming PNG if not a full data URL, based on downloadImage's filename.
-        // Adjust "image/png" if your image types vary and can be determined.
-        imageSrc = `data:image/png;base64,${rawCoverImage}`;
+    // 1. Handle new array format (primary)
+    if (Array.isArray(data) && data.length > 0 && data[0]?.json) {
+      const articleJson = data[0].json;
+
+      // Image from new format: expect raw Base64 string
+      if (articleJson.coverImage && typeof articleJson.coverImage === 'string') {
+        imageSource = `data:image/png;base64,${articleJson.coverImage}`;
       }
-    } else if (rawImageBase64 && typeof rawImageBase64 === 'string') { // Fallback
-      if (rawImageBase64.startsWith('data:image')) {
-        imageSrc = rawImageBase64;
-      } else {
-        imageSrc = `data:image/png;base64,${rawImageBase64}`;
+
+      // Title from new format: explicit or extracted from HTML
+      if (articleJson.generatedTitle?.trim()) {
+        title = articleJson.generatedTitle.trim();
+      } else if (articleJson.content) {
+        const extractedTitle = extractTitleFromHtml(articleJson.content);
+        if (extractedTitle) title = extractedTitle;
+      }
+
+      // HTML content from new format
+      if (articleJson.content) {
+        mainHtmlContent = articleJson.content;
       }
     }
-    setFinalImageSource(imageSrc);
+    // 2. Handle fallback "debug" object format
+    else if (!Array.isArray(data) && data) { // 'data' here is FallbackArticleData
+      const fallbackData = data as FallbackArticleData;
 
-    // --- TITLE LOGIC ---
-    let titleStr = "Нийтлэл"; // Default title
-
-    if (data.generatedTitle && typeof data.generatedTitle === 'string' && data.generatedTitle.trim() !== "") {
-      titleStr = data.generatedTitle.trim();
-    } else if (data.content && typeof data.content === 'string') {
-      // Try to extract title from HTML content if generatedTitle is not available
-      // This part runs in the browser, so document is available.
-      try {
-        const tempEl = document.createElement('div');
-        tempEl.innerHTML = data.content;
-        const titleTag = tempEl.querySelector('title');
-        if (titleTag && titleTag.textContent && titleTag.textContent.trim() !== "") {
-          titleStr = titleTag.textContent.trim();
+      // Image from fallback format
+      if (fallbackData.coverImage && typeof fallbackData.coverImage === 'string') {
+        if (fallbackData.coverImage.startsWith('data:image')) { // Already a data URL
+            imageSource = fallbackData.coverImage;
+        } else { // Assume raw Base64 string
+            imageSource = `data:image/png;base64,${fallbackData.coverImage}`;
         }
-      } catch (e) {
-        console.error("Error parsing HTML to extract title:", e);
-        // titleStr remains default if error or no title tag
+      } else if (fallbackData.imageBase64 && typeof fallbackData.imageBase64 === 'string') { // Secondary fallback
+        imageSource = `data:image/png;base64,${fallbackData.imageBase64}`;
+      }
+
+      // Title from fallback format: explicit or extracted from HTML
+      if (fallbackData.generatedTitle?.trim()) {
+        title = fallbackData.generatedTitle.trim();
+      } else if (fallbackData.content) {
+        const extractedTitle = extractTitleFromHtml(fallbackData.content);
+        if (extractedTitle) title = extractedTitle;
+      }
+      
+      // HTML content from fallback format
+      if (fallbackData.content) {
+        mainHtmlContent = fallbackData.content;
       }
     }
-    setDisplayTitle(titleStr);
+    return { title, imageSource, mainHtmlContent };
+  }, [data]);
 
-  }, [data]); // Recalculate when data changes
+  const { title: displayTitle, imageSource: finalImageSource, mainHtmlContent } = processedArticle;
 
   const downloadImage = () => {
     if (!finalImageSource) {
@@ -92,11 +169,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
     }
     const link = document.createElement("a");
     link.href = finalImageSource;
-    link.download = `image.png`; // Consider making filename dynamic if type varies
+    // Sanitize title for filename or use a default
+    const filename = (displayTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() || 'article_image') + '.png';
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     toast({
       title: "Амжилттай",
       description: "Зураг татаж авлаа.",
@@ -105,200 +184,101 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
   };
 
   const copyArticleText = () => {
-    setIsCopying(true);
-    let textToCopy = "";
-
-    if (data.content && typeof data.content === 'string') {
-      const tempEl = document.createElement('div');
-      tempEl.innerHTML = data.content;
-      textToCopy = tempEl.textContent || tempEl.innerText || "";
-    } else if (data.generatedTitle || data.introduction || data.sections || data.conclusion) {
-      // Fallback to "old format" if HTML content is missing
-      // Use the explicitly provided generatedTitle for copying if it exists in the data object
-      if (data.generatedTitle && typeof data.generatedTitle === 'string') {
-        textToCopy += `${data.generatedTitle}\n\n`;
-      }
-      
-      if (data.introduction?.content && typeof data.introduction.content === 'string') {
-        textToCopy += `${data.introduction.content}\n\n`;
-      }
-      
-      if (data.sections) {
-        data.sections.forEach((section) => {
-          if (section.content && typeof section.content === 'string' && (section.type === "heading" || section.type === "paragraph")) {
-             textToCopy += `${section.content}\n\n`;
-          } else if (section.type === "list" && section.items) {
-            section.items.forEach((item, index) => {
-              if (typeof item === 'string') {
-                if (section.ordered) {
-                  textToCopy += `${index + 1}. ${item}\n`;
-                } else {
-                  textToCopy += `• ${item}\n`;
-                }
-              }
-            });
-            textToCopy += "\n";
-          }
-        });
-      }
-
-      if (data.conclusion?.content && typeof data.conclusion.content === 'string') {
-        textToCopy += `${data.conclusion.content}`;
-      }
-
-      textToCopy = textToCopy
-        .replace(/\*\*(.*?)\*\*/g, "$1") 
-        .replace(/\*(.*?)\*/g, "$1");
-    }
-
-    if (!textToCopy.trim()) {
-        toast({
-            title: "Анхаар",
-            description: "Хуулах текст олдсонгүй.",
-            variant: "destructive",
-            duration: 2000,
-        });
-        setIsCopying(false);
-        return;
-    }
-
-    navigator.clipboard.writeText(textToCopy).then(() => {
+    if (!mainHtmlContent) {
       toast({
-        title: "Амжилттай",
-        description: "Нийтлэлийн текст хуулагдлаа.",
-        duration: 2000,
-      });
-      setIsCopying(false);
-    }).catch(err => {
-      console.error("Could not copy text: ", err);
-      toast({
-        title: "Алдаа",
-        description: "Текст хуулж чадсангүй.",
+        title: "Анхаар",
+        description: "Хуулах боломжтой текст олдсонгүй.",
         variant: "destructive",
         duration: 2000,
       });
-      setIsCopying(false);
-    });
-  };
+      return;
+    }
 
-  const renderMarkdown = (content: string | undefined): string => {
-    if (typeof content !== 'string') return "";
-    return content
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>");
+    const textToCopy = extractTextFromHtml(mainHtmlContent);
+
+    if (!textToCopy.trim()) {
+      toast({
+        title: "Анхаар",
+        description: "Нийтлэлд хуулах текст байхгүй байна.",
+        variant: "destructive",
+        duration: 2000,
+      });
+      return;
+    }
+
+    setIsCopying(true);
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast({
+          title: "Амжилттай",
+          description: "Нийтлэлийн текст хуулагдлаа.",
+          duration: 2000,
+        });
+      })
+      .catch(err => {
+        console.error("Could not copy text: ", err);
+        toast({
+          title: "Алдаа",
+          description: "Текст хуулж чадсангүй. Та өөрөө сонгож хуулна уу.",
+          variant: "destructive",
+          duration: 3000,
+        });
+      })
+      .finally(() => {
+        setIsCopying(false);
+      });
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       <div className="text-center">
-        <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-4">{displayTitle}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-2 md:mb-4 px-2">{displayTitle}</h1>
       </div>
 
       {finalImageSource && (
-        <div className="bg-white rounded-lg overflow-hidden shadow-md relative">
-          <img src={finalImageSource} alt="Нийтлэлийн зураг" className="w-full h-auto object-cover" />
+        <div className="bg-white rounded-lg overflow-hidden shadow-md relative mx-auto max-w-3xl"> {/* Centered image */}
+          <img 
+            src={finalImageSource} 
+            alt="Нийтлэлийн зураг" 
+            className="w-full h-auto object-cover max-h-[400px] md:max-h-[500px]" // Responsive max height
+          />
           <Button
             variant="outline"
             size="sm"
             onClick={downloadImage}
-            className="absolute top-2 right-2 bg-white/80 hover:bg-white"
+            className="absolute top-2 right-2 bg-white/80 hover:bg-white text-xs sm:text-sm p-1.5 sm:p-2"
           >
-            <Download className="h-4 w-4 mr-1" /> Зураг Татах
+            <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1" /> Зураг Татах
           </Button>
         </div>
       )}
 
-      <div className="prose prose-lg max-w-none bg-white p-6 rounded-lg shadow-md">
-        {data.content && typeof data.content === 'string' ? (
-          <div dangerouslySetInnerHTML={{ __html: data.content }}></div>
-        ) : (
-          <>
-            {data.introduction?.content && (
-              <div className="mb-6">
-                <p
-                  className="text-[#333333] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(data.introduction.content) }}
-                ></p>
-              </div>
-            )}
-
-            {data.sections?.map((section, index) => {
-              if (section.type === "heading" && section.content) {
-                return (
-                  <div key={index} className="mt-6 mb-4">
-                    {section.level === 2 ? (
-                      <h2 className="text-xl font-bold text-[#008080]">{section.content}</h2>
-                    ) : (
-                      <h3 className="text-lg font-semibold text-[#008080]">{section.content}</h3>
-                    )}
-                  </div>
-                );
-              } else if (section.type === "paragraph" && section.content) {
-                return (
-                  <div key={index} className="my-4">
-                    <p
-                      className="text-[#333333] leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdown(section.content) }}
-                    ></p>
-                  </div>
-                );
-              } else if (section.type === "list" && section.items) {
-                return (
-                  <div key={index} className="my-4">
-                    {section.ordered ? (
-                      <ol className="list-decimal pl-5 space-y-2">
-                        {section.items.map((item, itemIndex) => (
-                          <li
-                            key={itemIndex}
-                            className="text-[#333333]"
-                            dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
-                          ></li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <ul className="list-disc pl-5 space-y-2">
-                        {section.items.map((item, itemIndex) => (
-                          <li
-                            key={itemIndex}
-                            className="text-[#333333]"
-                            dangerouslySetInnerHTML={{ __html: renderMarkdown(item) }}
-                          ></li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              }
-              return null;
-            })}
-
-            {data.conclusion?.content && (
-              <div className="mt-6">
-                <p
-                  className="text-[#333333] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(data.conclusion.content) }}
-                ></p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-4 justify-center mt-8">
+      {mainHtmlContent ? (
+        <div
+          className="prose prose-slate lg:prose-lg max-w-none bg-white p-4 sm:p-6 rounded-lg shadow-md article-html-content"
+          dangerouslySetInnerHTML={{ __html: mainHtmlContent }}
+        />
+      ) : (
+        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+          <p className="text-gray-500">Нийтлэлийн агуулга олдсонгүй эсвэл хоосон байна.</p>
+        </div>
+      )}
+      
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-4 justify-center mt-6 md:mt-8">
         <Button
           variant="outline"
           onClick={copyArticleText}
-          disabled={isCopying}
-          className="flex-1 py-6 border-[#3B5999] text-[#3B5999] hover:bg-[#3B5999]/10"
+          disabled={isCopying || !mainHtmlContent}
+          className="flex-1 py-3 sm:py-4 text-sm sm:text-base border-[#3B5999] text-[#3B5999] hover:bg-[#3B5999]/10 transition-colors duration-150"
         >
-          <Copy className="h-5 w-5 mr-2" /> Нийтлэл Хуулах
+          <Copy className="h-4 w-4 sm:h-5 sm:w-5 mr-2" /> {isCopying ? "Хуулж байна..." : "Нийтлэл Хуулах"}
         </Button>
-        
+
         <Button
           onClick={onNewArticle}
-          className="flex-1 py-6 bg-gradient-to-r from-[#FFD700] to-[#FFA07A] hover:from-[#FFD700]/90 hover:to-[#FFA07A]/90 text-[#333333] font-bold shadow-md"
+          className="flex-1 py-3 sm:py-4 text-sm sm:text-base bg-gradient-to-r from-[#FFD700] to-[#FFA07A] hover:from-[#FFD700]/90 hover:to-[#FFA07A]/90 text-[#333333] font-semibold shadow-md hover:shadow-lg transition-all duration-150"
         >
-          Шинэ Нийтлэл Бичүүлэх <ArrowRight className="h-5 w-5 ml-2" />
+          Шинэ Нийтлэл Бичүүлэх <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 ml-2" />
         </Button>
       </div>
     </div>

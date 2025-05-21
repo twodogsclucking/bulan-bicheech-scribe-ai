@@ -1,0 +1,11 @@
+[
+  {
+    "json": {
+      "content": "<html>\n<head>\n    <meta charset=\"UTF-8\">\n    <title>Оюун-Эрдэнийн Засгийн Газрын Үеийн Монгол Улсын Индексүүдийн Тойм</title>\n    <style>\n        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; background-color: #f4f4f4; color: #333; }\n        h1 { color: #2c3e50; text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }\n        h2 { color: #3498db; margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 5px;}\n        h3 { color: #2980b9; margin-top: 20px; }\n        p { margin-bottom: 15px; text-align: justify; }\n        ul { list-style-type: disc; margin-left: 20px; margin-bottom: 15px; }\n        li { margin-bottom: 5px; }\n        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }\n        .highlight { color: #e67e22; font-weight: bold; }\n        .index-change { font-style: italic; }\n        .positive { color: green; }\n        .negative { color: red; }\n        .section-intro { font-style: italic; color: #555; margin-bottom: 20px; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n............  </div>\n</body>\n</html>",
+      "coverImage": "iVBORw0KGgoAAAANSUhEUgAABAAAAAQACAIAAADwf7zUAAIf92NhQlgAAh/3anVtYgAAAB5qdW1kYzJwYQARABCAAACqADibcQNjMnBhAAAANxNqdW1iAAAAR2p1bWRjMm1hABEAEIAAAKoAOJtxA3VybjpjMnBhOmZkMmQ1ODBkLTU2YzQtNDFmNi04MDM3LTU0YWZjMzhmYWFiMAAAAAHhanVtYgAAAClqdW1kYzJhcwARABCAAACqADibcQNjMnBhLmFzc2VydGlvbnMAAAABBWp1bWIAAAApanVtZGNib3IAEQAQgAAAqgA4m3EDYzJwYS5hY3Rpb25zLnYyAAAAANRjYm9yoWdhY3Rpb25zgqNmYWN0aW9ubGMycGEuY3JlYXRlZG1zb2Z0d2FyZUFnZW50v2RuYW1lZkdQVC00b......................../"
+    },
+    "pairedItem": {
+      "item": 0
+    }
+  }
+]

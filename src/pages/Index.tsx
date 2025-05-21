@@ -1,23 +1,28 @@
+// src/pages/Index.tsx
 
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import InputForm from "@/components/InputForm";
 import LoadingIndicator from "@/components/LoadingIndicator";
-import ResultsDisplay from "@/components/ResultsDisplay";
+import ResultsDisplay from "@/components/ResultsDisplay"; // Rewritten version will be used
 import ErrorDisplay from "@/components/ErrorDisplay";
-import { ArticleData, FormData } from "@/types/article";
+// Updated type imports:
+import { FormData, ResultsDisplayInput, ArticleApiItem, SingleArticleProcessedData } from "@/types/article";
 
 type AppState = "input" | "loading" | "results" | "error";
 
 const Index = () => {
   const [appState, setAppState] = useState<AppState>("input");
   const [formData, setFormData] = useState<FormData | null>(null);
-  const [resultsData, setResultsData] = useState<ArticleData | null>(null);
+  // Update resultsData state to use the new ResultsDisplayInput type
+  const [resultsData, setResultsData] = useState<ResultsDisplayInput | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const handleFormSubmit = async (data: FormData) => {
     setFormData(data);
     setAppState("loading");
+    setResultsData(null); // Clear previous results
+    setErrorMessage(""); // Clear previous errors
 
     try {
       const response = await fetch(
@@ -36,42 +41,36 @@ const Index = () => {
         }
       );
 
-      const responseData = await response.json();
-      
-      // Handle the new response format which might be wrapped in an array
-      let processedData: ArticleData;
-      
-      if (Array.isArray(responseData) && responseData.length > 0) {
-        // Extract from array wrapper
-        const firstItem = responseData[0];
-        
-        // Check if we have the nested structure with json property
-        if (firstItem.json && firstItem.json.content && firstItem.json.coverImage) {
-          processedData = {
-            status: "success",
-            content: firstItem.json.content,
-            coverImage: firstItem.json.coverImage
-          };
-        } else {
-          // Try to use the item directly
-          processedData = firstItem as ArticleData;
-        }
+      const responseData: any = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = responseData?.message || responseData?.errorMessage || `Серверээс алдаа буцлаа (${response.status})`;
+        throw new Error(errorMsg);
+      }
+
+      // The rewritten ResultsDisplay can handle ArticleApiItem[] or SingleArticleProcessedData.
+      // We expect the API to return data in the format: ArticleApiItem[]
+      if (Array.isArray(responseData) && responseData.length > 0 && responseData[0]?.json?.content) {
+        setResultsData(responseData as ArticleApiItem[]);
+      } else if (responseData?.json?.content) { // If API returns a single ArticleApiItem object (not in an array)
+        setResultsData([responseData as ArticleApiItem]);
+      } else if (responseData?.content || responseData?.generatedTitle) { // If API returns a flat SingleArticleProcessedData object
+        setResultsData(responseData as SingleArticleProcessedData);
       } else {
-        // Use response data directly
-        processedData = responseData as ArticleData;
+        // Handle cases like { status: "error", errorMessage: "..." } if API might still send that
+        if (responseData.status === "error" && responseData.errorMessage) {
+           setErrorMessage(responseData.errorMessage);
+           setAppState("error");
+           return;
+        }
+        throw new Error("API-аас ирсэн өгөгдлийн бүтэц танигдсангүй эсвэл хоосон байна.");
       }
-
-      if (processedData.status === "error") {
-        setErrorMessage(processedData.errorMessage || "Тодорхойгүй алдаа");
-        setAppState("error");
-        return;
-      }
-
-      setResultsData(processedData);
+      
       setAppState("results");
+
     } catch (error) {
       console.error("Error submitting form:", error);
-      setErrorMessage("Серверт хандахад алдаа гарлаа. Дахин оролдоно уу.");
+      setErrorMessage(error instanceof Error ? error.message : "Серверт хандахад алдаа гарлаа. Дахин оролдоно уу.");
       setAppState("error");
     }
   };
@@ -99,7 +98,7 @@ const Index = () => {
             {appState === "input" && (
               <InputForm 
                 onSubmit={handleFormSubmit} 
-                setResultsData={setResultsData}
+                setResultsData={setResultsData} // This will now set ResultsDisplayInput
                 setAppState={setAppState}
               />
             )}

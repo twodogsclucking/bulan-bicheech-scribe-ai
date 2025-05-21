@@ -1,24 +1,25 @@
-import React, { useState } from "react";
+// src/components/InputForm.tsx
+
+import React from "react"; // Removed useState as it's not used in this simplified version
 import { useForm } from "react-hook-form";
-import { FormData, ArticleData, NestedJsonResponse } from "@/types/article";
+import { FormData, ResultsDisplayInput } from "@/types/article"; // Removed unused types
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Label is used for the new text sections
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, Form } from "@/components/ui/form";
-import { Download, Upload } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+// Removed Upload and toast as they were part of the debug functionality
 
 interface InputFormProps {
   onSubmit: (data: FormData) => void;
-  setResultsData?: (data: ArticleData) => void;
+  // setResultsData and setAppState might not be needed if debug mode is fully removed from this component's direct responsibility
+  // If Index.tsx handles all state changes based on onSubmit, these could be optional or removed
+  setResultsData?: (data: ResultsDisplayInput) => void;
   setAppState?: (state: "input" | "loading" | "results" | "error") => void;
 }
 
-const InputForm: React.FC<InputFormProps> = ({ onSubmit, setResultsData, setAppState }) => {
-  const [debugMode, setDebugMode] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+const InputForm: React.FC<InputFormProps> = ({ onSubmit }) => { // Removed unused props
 
   const form = useForm<FormData>({
     defaultValues: {
@@ -33,106 +34,27 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, setResultsData, setAppS
     onSubmit(data);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  const handleDebugDisplay = () => {
-    if (!selectedFile || !setResultsData || !setAppState) {
-      toast({
-        title: "Алдаа",
-        description: "JSON файл сонгоно уу эсвэл шаардлагатай функцүүд алга байна",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      try {
-        if (e.target?.result) {
-          let jsonContent = e.target.result as string;
-          
-          // Log the raw content for debugging
-          console.log("Raw file content:", jsonContent);
-          
-          // Try to parse the JSON
-          let parsedData;
-          try {
-            parsedData = JSON.parse(jsonContent);
-            console.log("Parsed data:", parsedData);
-          } catch (parseError) {
-            console.error("JSON parsing error:", parseError);
-            throw new Error("JSON файл буруу форматтай байна.");
-          }
-          
-          // Handle the array wrapping if present
-          if (Array.isArray(parsedData)) {
-            console.log("JSON is an array, taking first item");
-            if (parsedData.length === 0) {
-              throw new Error("JSON массив хоосон байна.");
-            }
-            parsedData = parsedData[0];
-          }
-          
-          // Check if we have the nested structure with json property
-          const nestedData = parsedData as NestedJsonResponse;
-          if (nestedData.json && nestedData.json.content && nestedData.json.coverImage) {
-            console.log("Found nested json structure");
-            
-            // Convert to our ArticleData format
-            const articleData: ArticleData = {
-              status: "success",
-              content: nestedData.json.content,
-              coverImage: nestedData.json.coverImage
-            };
-            
-            // Set results data and change app state
-            setResultsData(articleData);
-            setAppState("results");
-            return;
-          }
-          
-          // If not nested, try to use it directly if it matches ArticleData
-          const directData = parsedData as ArticleData;
-          if (
-            (directData.content || directData.generatedTitle) && 
-            (directData.coverImage || directData.imageBase64)
-          ) {
-            console.log("Using direct data structure");
-            setResultsData(directData);
-            setAppState("results");
-            return;
-          }
-          
-          throw new Error("JSON бүтэц буруу байна. Шаардлагатай талбарууд алга байна.");
-        }
-      } catch (error) {
-        console.error("JSON файл уншихад алдаа гарлаа:", error);
-        toast({
-          title: "JSON алдаа",
-          description: error instanceof Error ? error.message : "JSON файл уншихад алдаа гарлаа",
-          variant: "destructive",
-        });
-      }
-    };
-
-    reader.onerror = () => {
-      toast({
-        title: "Файл алдаа",
-        description: "Файл уншихад алдаа гарлаа",
-        variant: "destructive",
-      });
-    };
-
-    reader.readAsText(selectedFile);
-  };
-
   return (
-    <div>
+    // Added a root div to contain the new informational text and the form
+    <div className="space-y-8"> {/* Added space-y for overall vertical spacing */}
+      {/* New Informational Sections */}
+      <div className="text-left space-y-6 p-4 md:p-6 bg-white rounded-lg shadow-md border border-gray-200">
+        <div>
+          <h2 className="text-xl md:text-2xl font-semibold text-[#3B5999] mb-3">
+            Хиймэл оюуны агент гэж юу вэ?
+          </h2>
+          <p className="text-sm md:text-base text-gray-700 leading-relaxed">
+            Хиймэл оюуны агент нь тодорхой даалгавруудыг бие даан гүйцэтгэх, орчноосоо мэдээлэл хүлээн авч, түүндээ үндэслэн шийдвэр гаргах чадвартай ухаалаг програм юм. Энгийнээр хэлбэл, агент нь таны өмнөөс судалгаа хийх, мэдээлэл боловсруулах, эсвэл ямар нэгэн үйлдлийг хийх дижитал туслах гэж ойлгож болно.
+          </p>
+        </div>
+        <div>
+          <p className="text-sm md:text-base text-gray-700 leading-relaxed">
+            Манай <strong className="font-semibold text-[#3B5999]">Булан Бичээч</strong> агент нь Google-ийн хамгийн сүүлийн үеийн дэвшилтэт хиймэл оюуны загварууд, гүнзгийрүүлсэн судалгаа хийхэд зориулсан Tavily Tool, болон өнгө аяс, агуулгад тохирсон нүүр зураг бүтээхэд ChatGPT-г ашиглан ажилладаг.
+          </p>
+        </div>
+      </div>
+
+      {/* Existing Form */}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
           <FormField
@@ -223,7 +145,6 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, setResultsData, setAppS
               )}
             />
           </div>
-
           <Button
             type="submit"
             className="w-full py-6 text-lg bg-gradient-to-r from-[#FFD700] to-[#FFA07A] hover:from-[#FFD700]/90 hover:to-[#FFA07A]/90 text-[#333333] font-bold shadow-lg"
@@ -232,71 +153,6 @@ const InputForm: React.FC<InputFormProps> = ({ onSubmit, setResultsData, setAppS
           </Button>
         </form>
       </Form>
-
-      {/* Debug/Test Mode Toggle */}
-      <div className="mt-8 pt-6 border-t border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <Label htmlFor="debug-toggle" className="font-medium text-[#333333]">
-            Дебаг/Тест горим
-          </Label>
-          <div className="relative inline-block w-12 align-middle select-none">
-            <input
-              type="checkbox"
-              id="debug-toggle"
-              checked={debugMode}
-              onChange={() => setDebugMode(!debugMode)}
-              className="sr-only"
-            />
-            <div
-              className={`block w-12 h-7 rounded-full ${
-                debugMode ? "bg-[#3B5999]" : "bg-gray-300"
-              }`}
-            ></div>
-            <div
-              className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${
-                debugMode ? "transform translate-x-5" : ""
-              }`}
-            ></div>
-          </div>
-        </div>
-
-        {debugMode && (
-          <div className="p-4 border border-[#1EAEDB]/30 rounded-lg bg-[#F5F5F5]">
-            <p className="text-sm text-[#333333] mb-4">
-              JSON файл оруулж, шууд харахын тулд энэ хэсгийг ашиглаж болно.
-            </p>
-            
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="json-file" className="text-[#333333] font-medium block mb-2">
-                  JSON файл сонгох
-                </Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="json-file"
-                    type="file"
-                    accept=".json"
-                    onChange={handleFileChange}
-                    className="border-[#3B5999]/30 focus:border-[#3B5999]"
-                  />
-                  <span className="text-sm text-gray-500">
-                    {selectedFile ? selectedFile.name : "Файл сонгоогүй байна"}
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                onClick={handleDebugDisplay}
-                disabled={!selectedFile}
-                className="flex items-center gap-2 bg-[#1EAEDB] hover:bg-[#1EAEDB]/90 text-white"
-              >
-                <Upload size={18} /> JSON Файлаас Харуулах
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
