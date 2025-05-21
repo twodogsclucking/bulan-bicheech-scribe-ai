@@ -1,28 +1,24 @@
-// src/pages/Index.tsx
-
 import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import InputForm from "@/components/InputForm";
 import LoadingIndicator from "@/components/LoadingIndicator";
-import ResultsDisplay from "@/components/ResultsDisplay"; // Rewritten version will be used
+import ResultsDisplay from "@/components/ResultsDisplay";
 import ErrorDisplay from "@/components/ErrorDisplay";
-// Updated type imports:
 import { FormData, ResultsDisplayInput, ArticleApiItem, SingleArticleProcessedData } from "@/types/article";
 
 type AppState = "input" | "loading" | "results" | "error";
 
 const Index = () => {
-  const [appState, setAppState] = useState<AppState>("input");
+  const [appState, setAppState] = useState<AppState>("input"); // Back to "input"
   const [formData, setFormData] = useState<FormData | null>(null);
-  // Update resultsData state to use the new ResultsDisplayInput type
-  const [resultsData, setResultsData] = useState<ResultsDisplayInput | null>(null);
+  const [resultsData, setResultsData] = useState<ResultsDisplayInput | null>(null); // Back to null
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const handleFormSubmit = async (data: FormData) => {
     setFormData(data);
     setAppState("loading");
-    setResultsData(null); // Clear previous results
-    setErrorMessage(""); // Clear previous errors
+    setResultsData(null); 
+    setErrorMessage(""); 
 
     try {
       const response = await fetch(
@@ -41,23 +37,20 @@ const Index = () => {
         }
       );
 
-      const responseData: any = await response.json();
+      const responseData: any = await response.json(); 
 
       if (!response.ok) {
         const errorMsg = responseData?.message || responseData?.errorMessage || `Серверээс алдаа буцлаа (${response.status})`;
         throw new Error(errorMsg);
       }
-
-      // The rewritten ResultsDisplay can handle ArticleApiItem[] or SingleArticleProcessedData.
-      // We expect the API to return data in the format: ArticleApiItem[]
+      
       if (Array.isArray(responseData) && responseData.length > 0 && responseData[0]?.json?.content) {
         setResultsData(responseData as ArticleApiItem[]);
-      } else if (responseData?.json?.content) { // If API returns a single ArticleApiItem object (not in an array)
+      } else if (responseData?.json?.content) { 
         setResultsData([responseData as ArticleApiItem]);
-      } else if (responseData?.content || responseData?.generatedTitle) { // If API returns a flat SingleArticleProcessedData object
+      } else if (responseData?.content || responseData?.generatedTitle) { 
         setResultsData(responseData as SingleArticleProcessedData);
       } else {
-        // Handle cases like { status: "error", errorMessage: "..." } if API might still send that
         if (responseData.status === "error" && responseData.errorMessage) {
            setErrorMessage(responseData.errorMessage);
            setAppState("error");
@@ -96,9 +89,11 @@ const Index = () => {
           </CardHeader>
           <CardContent className="p-6">
             {appState === "input" && (
-              <InputForm 
-                onSubmit={handleFormSubmit} 
-                setResultsData={setResultsData} // This will now set ResultsDisplayInput
+              <InputForm
+                onSubmit={handleFormSubmit}
+                // These props are passed based on InputForm's interface,
+                // even if the current simplified InputForm (without debug) doesn't use them directly.
+                setResultsData={setResultsData} 
                 setAppState={setAppState}
               />
             )}

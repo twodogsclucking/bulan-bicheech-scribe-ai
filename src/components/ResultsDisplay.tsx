@@ -1,42 +1,31 @@
+// src/components/ResultsDisplay.tsx
+// ... (other imports and code remain the same)
 import React, { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button"; // Your existing import
-import { toast } from "@/hooks/use-toast";       // Your existing import
-import { Download, Copy, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
+import { Download, Copy, ArrowRight, FileText } from "lucide-react";
+import * as HTMLToDOCX_Namespace from 'html-to-docx';
+import { saveAs } from 'file-saver';
 
 // --- Type Definitions ---
-
-/**
- * Represents the core JSON structure within each item of the new data array.
- */
+// ... (your existing type definitions)
 interface ArticleJsonData {
-  content: string;        // HTML string
-  coverImage?: string;     // Base64 string (without 'data:image/png;base64,' prefix)
-  generatedTitle?: string; // Optional explicit title provided in the JSON
+  content: string;
+  coverImage?: string;
+  generatedTitle?: string;
 }
 
-/**
- * Represents an item in the new array data structure.
- * Example: [{ json: { content: "...", coverImage: "..." } }]
- */
 interface NewArticleFormatItem {
   json: ArticleJsonData;
-  // pairedItem?: any; // Retained from example, include if used, otherwise optional
 }
 
-/**
- * Represents the fallback data structure for direct file uploads ("debug method").
- * This allows the component to also accept a single object.
- */
 interface FallbackArticleData {
-  content?: string;         // HTML string
-  coverImage?: string;      // Base64 string or a full data URL
-  imageBase64?: string;     // Base64 string (raw, for fallback if coverImage is not a full URL)
-  generatedTitle?: string;  // Explicit title
+  content?: string;
+  coverImage?: string;
+  imageBase64?: string;
+  generatedTitle?: string;
 }
 
-/**
- * The 'data' prop can be the new array format or the fallback single object.
- */
 type ResultsDisplayData = NewArticleFormatItem[] | FallbackArticleData;
 
 interface ResultsDisplayProps {
@@ -44,25 +33,18 @@ interface ResultsDisplayProps {
   onNewArticle: () => void;
 }
 
-// --- Helper Functions ---
 
-/**
- * Extracts a title from an HTML string.
- * It first looks for a <title> tag, then for the first <h1>-<h6> tag.
- * @param htmlString The HTML content.
- * @returns The extracted title or null if not found.
- */
+// --- Helper Functions ---
+// ... (extractTitleFromHtml and extractTextFromHtml remain the same)
 const extractTitleFromHtml = (htmlString: string): string | null => {
-  if (typeof window === "undefined") return null; // Guard for server-side rendering
+  if (typeof window === "undefined") return null;
   try {
     const tempEl = document.createElement('div');
     tempEl.innerHTML = htmlString;
-
     const titleTag = tempEl.querySelector('title');
     if (titleTag?.textContent?.trim()) {
       return titleTag.textContent.trim();
     }
-
     const headingTag = tempEl.querySelector('h1, h2, h3, h4, h5, h6');
     if (headingTag?.textContent?.trim()) {
       return headingTag.textContent.trim();
@@ -73,13 +55,8 @@ const extractTitleFromHtml = (htmlString: string): string | null => {
   return null;
 };
 
-/**
- * Extracts plain text content from an HTML string.
- * @param htmlString The HTML content.
- * @returns The extracted plain text.
- */
 const extractTextFromHtml = (htmlString: string): string => {
-  if (typeof window === "undefined") return ""; // Guard for server-side rendering
+  if (typeof window === "undefined") return "";
   try {
     const tempEl = document.createElement('div');
     tempEl.innerHTML = htmlString;
@@ -90,64 +67,49 @@ const extractTextFromHtml = (htmlString: string): string => {
   }
 };
 
-// --- Component ---
 
+// --- Component ---
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) => {
   const [isCopying, setIsCopying] = useState(false);
+  const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
 
-  // Memoize processed article data to avoid redundant calculations.
-  // This recalculates when the 'data' prop changes.
   const processedArticle = useMemo(() => {
-    let title: string = "Нийтлэл"; // Default title
+    // ... (processedArticle logic remains the same)
+    let title: string = "Нийтлэл";
     let imageSource: string = "";
     let mainHtmlContent: string = "";
 
-    // 1. Handle new array format (primary)
     if (Array.isArray(data) && data.length > 0 && data[0]?.json) {
       const articleJson = data[0].json;
-
-      // Image from new format: expect raw Base64 string
       if (articleJson.coverImage && typeof articleJson.coverImage === 'string') {
         imageSource = `data:image/png;base64,${articleJson.coverImage}`;
       }
-
-      // Title from new format: explicit or extracted from HTML
       if (articleJson.generatedTitle?.trim()) {
         title = articleJson.generatedTitle.trim();
       } else if (articleJson.content) {
         const extractedTitle = extractTitleFromHtml(articleJson.content);
         if (extractedTitle) title = extractedTitle;
       }
-
-      // HTML content from new format
       if (articleJson.content) {
         mainHtmlContent = articleJson.content;
       }
-    }
-    // 2. Handle fallback "debug" object format
-    else if (!Array.isArray(data) && data) { // 'data' here is FallbackArticleData
+    } else if (!Array.isArray(data) && data) {
       const fallbackData = data as FallbackArticleData;
-
-      // Image from fallback format
       if (fallbackData.coverImage && typeof fallbackData.coverImage === 'string') {
-        if (fallbackData.coverImage.startsWith('data:image')) { // Already a data URL
-            imageSource = fallbackData.coverImage;
-        } else { // Assume raw Base64 string
-            imageSource = `data:image/png;base64,${fallbackData.coverImage}`;
+        if (fallbackData.coverImage.startsWith('data:image')) {
+          imageSource = fallbackData.coverImage;
+        } else {
+          imageSource = `data:image/png;base64,${fallbackData.coverImage}`;
         }
-      } else if (fallbackData.imageBase64 && typeof fallbackData.imageBase64 === 'string') { // Secondary fallback
+      } else if (fallbackData.imageBase64 && typeof fallbackData.imageBase64 === 'string') {
         imageSource = `data:image/png;base64,${fallbackData.imageBase64}`;
       }
-
-      // Title from fallback format: explicit or extracted from HTML
       if (fallbackData.generatedTitle?.trim()) {
         title = fallbackData.generatedTitle.trim();
       } else if (fallbackData.content) {
         const extractedTitle = extractTitleFromHtml(fallbackData.content);
         if (extractedTitle) title = extractedTitle;
       }
-      
-      // HTML content from fallback format
       if (fallbackData.content) {
         mainHtmlContent = fallbackData.content;
       }
@@ -158,6 +120,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
   const { title: displayTitle, imageSource: finalImageSource, mainHtmlContent } = processedArticle;
 
   const downloadImage = () => {
+    // ... (downloadImage function remains the same)
     if (!finalImageSource) {
       toast({
         title: "Алдаа",
@@ -169,13 +132,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
     }
     const link = document.createElement("a");
     link.href = finalImageSource;
-    // Sanitize title for filename or use a default
     const filename = (displayTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() || 'article_image') + '.png';
     link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     toast({
       title: "Амжилттай",
       description: "Зураг татаж авлаа.",
@@ -184,7 +145,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
   };
 
   const copyArticleText = () => {
-    if (!mainHtmlContent) {
+    // ... (copyArticleText function remains the same)
+     if (!mainHtmlContent) {
       toast({
         title: "Анхаар",
         description: "Хуулах боломжтой текст олдсонгүй.",
@@ -193,9 +155,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
       });
       return;
     }
-
     const textToCopy = extractTextFromHtml(mainHtmlContent);
-
     if (!textToCopy.trim()) {
       toast({
         title: "Анхаар",
@@ -205,7 +165,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
       });
       return;
     }
-
     setIsCopying(true);
     navigator.clipboard.writeText(textToCopy)
       .then(() => {
@@ -229,18 +188,101 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
       });
   };
 
+  const downloadAsDocx = async () => {
+    setIsDownloadingDocx(true);
+    if (!mainHtmlContent && !displayTitle) {
+      toast({
+        title: "Алдаа",
+        description: "DOCX файл руу хөрвүүлэх агуулга олдсонгүй.",
+        variant: "destructive",
+        duration: 3000,
+      });
+      setIsDownloadingDocx(false);
+      return;
+    }
+
+    let htmlToConvert = `<h1>${displayTitle}</h1>`;
+    if (finalImageSource) {
+      htmlToConvert += `<p><img src="${finalImageSource}" alt="${displayTitle || 'Cover Image'}" style="width:100%; max-width:550px; height:auto; display:block; margin: 0 auto;" /></p><br />`;
+    }
+    htmlToConvert += mainHtmlContent || "<p>Нийтлэлийн агуулга хоосон байна.</p>";
+
+    try {
+      let conversionFunction;
+      if (HTMLToDOCX_Namespace && typeof HTMLToDOCX_Namespace.asBlob === 'function') {
+        conversionFunction = HTMLToDOCX_Namespace.asBlob;
+        console.log("Using HTMLToDOCX_Namespace.asBlob");
+      } else if (HTMLToDOCX_Namespace && HTMLToDOCX_Namespace.default) {
+        if (typeof HTMLToDOCX_Namespace.default === 'function') {
+          conversionFunction = HTMLToDOCX_Namespace.default;
+          console.log("Using HTMLToDOCX_Namespace.default as function");
+        } else if (typeof HTMLToDOCX_Namespace.default.asBlob === 'function') {
+          conversionFunction = HTMLToDOCX_Namespace.default.asBlob;
+          console.log("Using HTMLToDOCX_Namespace.default.asBlob");
+        }
+      }
+      
+      if (typeof conversionFunction !== 'function') {
+        console.error("html-to-docx module structure:", HTMLToDOCX_Namespace);
+        throw new Error("DOCX хөрвүүлэх функц (asBlob эсвэл default) олдсонгүй. Таны 'html-to-docx' сангийн хувилбарыг шалгана уу эсвэл console лог-г харна уу.");
+      }
+
+      console.log("Attempting to convert HTML to DOCX...");
+      const uint8ArrayBuffer = await conversionFunction(htmlToConvert, { // Renamed to uint8ArrayBuffer for clarity
+        orientation: 'portrait',
+        margins: { top: 720, right: 720, bottom: 720, left: 720 },
+      });
+
+      console.log("Conversion result (should be Uint8Array):", uint8ArrayBuffer);
+      console.log("Type of conversion result:", typeof uint8ArrayBuffer);
+
+      if (!(uint8ArrayBuffer instanceof Uint8Array)) { // Check if it's a Uint8Array
+        console.error("Conversion did not return a Uint8Array:", uint8ArrayBuffer);
+        throw new TypeError("DOCX хөрвүүлэлтийн үр дүн хүлээгдэж буй Uint8Array биш байна.");
+      }
+
+      // Convert Uint8Array to Blob with the correct MIME type
+      const docxBlob = new Blob([uint8ArrayBuffer], { 
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+      });
+      console.log("Converted to Blob:", docxBlob);
+      console.log("Is it a Blob?", docxBlob instanceof Blob);
+
+
+      const sanitizedTitle = displayTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() || 'нийтлэл';
+      saveAs(docxBlob, `${sanitizedTitle}.docx`); // Pass the new Blob to saveAs
+
+      toast({
+        title: "Амжилттай",
+        description: "Нийтлэгийг DOCX хэлбэрээр татаж авлаа.",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error("Error converting to DOCX:", error); 
+      toast({
+        title: "Алдаа",
+        description: error instanceof Error ? error.message : "DOCX файл үүсгэхэд алдаа гарлаа. Дахин оролдоно уу.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setIsDownloadingDocx(false);
+    }
+  };
+
   return (
+    // ... JSX for rendering remains the same ...
     <div className="space-y-6 md:space-y-8">
       <div className="text-center">
         <h1 className="text-2xl md:text-3xl font-bold text-[#3B5999] mb-2 md:mb-4 px-2">{displayTitle}</h1>
       </div>
 
       {finalImageSource && (
-        <div className="bg-white rounded-lg overflow-hidden shadow-md relative mx-auto max-w-3xl"> {/* Centered image */}
+        <div className="bg-white rounded-lg overflow-hidden shadow-md relative mx-auto max-w-3xl">
           <img 
             src={finalImageSource} 
             alt="Нийтлэлийн зураг" 
-            className="w-full h-auto object-cover max-h-[400px] md:max-h-[500px]" // Responsive max height
+            className="w-full h-auto object-cover max-h-[400px] md:max-h-[500px]"
           />
           <Button
             variant="outline"
@@ -264,21 +306,30 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ data, onNewArticle }) =
         </div>
       )}
       
-      <div className="flex flex-col md:flex-row gap-3 sm:gap-4 justify-center mt-6 md:mt-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 justify-center mt-6 md:mt-8">
         <Button
           variant="outline"
           onClick={copyArticleText}
           disabled={isCopying || !mainHtmlContent}
-          className="flex-1 py-3 sm:py-4 text-sm sm:text-base border-[#3B5999] text-[#3B5999] hover:bg-[#3B5999]/10 transition-colors duration-150"
+          className="w-full py-3 sm:py-4 text-sm sm:text-base border-blue-600 text-blue-600 hover:bg-blue-600/10 transition-colors duration-150"
         >
-          <Copy className="h-4 w-4 sm:h-5 sm:w-5 mr-2" /> {isCopying ? "Хуулж байна..." : "Нийтлэл Хуулах"}
+          <Copy className="h-4 w-4 sm:h-5 sm:w-5 mr-2" /> {isCopying ? "Хуулж байна..." : "Текст Хуулах"}
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={downloadAsDocx}
+          disabled={isDownloadingDocx || (!mainHtmlContent && !displayTitle)}
+          className="w-full py-3 sm:py-4 text-sm sm:text-base border-green-600 text-green-600 hover:bg-green-600/10 transition-colors duration-150"
+        >
+          <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-2" /> {isDownloadingDocx ? "Боловсруулж..." : "DOCX Татах"}
         </Button>
 
         <Button
           onClick={onNewArticle}
-          className="flex-1 py-3 sm:py-4 text-sm sm:text-base bg-gradient-to-r from-[#FFD700] to-[#FFA07A] hover:from-[#FFD700]/90 hover:to-[#FFA07A]/90 text-[#333333] font-semibold shadow-md hover:shadow-lg transition-all duration-150"
+          className="w-full py-3 sm:py-4 text-sm sm:text-base bg-gradient-to-r from-[#FFD700] to-[#FFA07A] hover:from-[#FFD700]/90 hover:to-[#FFA07A]/90 text-[#333333] font-semibold shadow-md hover:shadow-lg transition-all duration-150"
         >
-          Шинэ Нийтлэл Бичүүлэх <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 ml-2" />
+          Шинэ Нийтлэл <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 ml-2" />
         </Button>
       </div>
     </div>
